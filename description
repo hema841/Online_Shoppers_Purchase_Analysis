@@ -1,0 +1,93 @@
+## Original Dataset and Feature Engineering
+
+### Original dataset
+
+The supplied Online Shoppers Purchasing Intention CSV contains **12,330 session rows and 18 columns**: 17 input features and the target column, `Revenue`.
+
+The original features describe:
+
+- **Page activity:** `Administrative`, `Informational`, and `ProductRelated`, plus the corresponding duration columns.
+- **Session behavior:** `BounceRates`, `ExitRates`, `PageValues`, and `SpecialDay`.
+- **Session context:** `Month`, `Weekend`, and `VisitorType`.
+- **Encoded categories:** `OperatingSystems`, `Browser`, `Region`, and `TrafficType`.
+- **Purchase outcome:** `Revenue` (`True` or `False`).
+
+The original CSV contains the recorded session values. It does not contain the derived features described below.
+
+### Changes from the original dataset
+
+The original CSV was **not modified**. The analysis code created additional features in memory for model training. These are derived from existing columns; they do not represent newly collected information.
+
+| Added feature | How it is calculated | What it represents |
+|---|---|---|
+| `Administrative_visited` | `Administrative > 0` | Whether the session included Administrative pages |
+| `Informational_visited` | `Informational > 0` | Whether the session included Informational pages |
+| `ProductRelated_visited` | `ProductRelated > 0` | Whether the session included ProductRelated pages |
+| `Administrative_seconds_per_page` | `Administrative_Duration / Administrative` | Average time per Administrative page |
+| `Informational_seconds_per_page` | `Informational_Duration / Informational` | Average time per Informational page |
+| `ProductRelated_seconds_per_page` | `ProductRelated_Duration / ProductRelated` | Average time per ProductRelated page |
+| `total_pages` | Sum of the three page-count columns | Total pages visited across the three page groups |
+| `total_duration` | Sum of the three duration columns | Total time across the three page groups |
+| `month_sin`, `month_cos` | Month converted to cyclical coordinates | Represents the calendar cycle, placing December and January near each other |
+
+For a page-count feature with a value of zero, the corresponding seconds-per-page feature is set to zero to avoid division by zero. The separate `*_visited` flag indicates that no pages of that type were visited.
+
+### Categorical encoding
+
+The code also one-hot encoded `OperatingSystems`, `Browser`, `Region`, `TrafficType`, `Month`, `VisitorType`, and `Weekend` for use by the model.
+
+For example, the numeric Browser code `2` is represented as a category indicator such as `Browser_2`. This prevents the model from interpreting browser codes as ordered numeric measurements. These encoded columns are created in the model preprocessing step; they are not added to the original CSV.
+
+### Example
+
+If an original session contains:
+
+| Original column | Value |
+|---|---:|
+| `Administrative` | 2 |
+| `Administrative_Duration` | 30 |
+| `Informational` | 0 |
+| `Informational_Duration` | 0 |
+| `ProductRelated` | 5 |
+| `ProductRelated_Duration` | 100 |
+| `Month` | `Nov` |
+
+The analysis code derives:
+
+| Added feature | Value |
+|---|---:|
+| `Administrative_visited` | 1 |
+| `Administrative_seconds_per_page` | 15 |
+| `Informational_visited` | 0 |
+| `Informational_seconds_per_page` | 0 |
+| `ProductRelated_visited` | 1 |
+| `ProductRelated_seconds_per_page` | 20 |
+| `total_pages` | 7 |
+| `total_duration` | 130 |
+| `month_sin` | approximately -0.5 |
+| `month_cos` | approximately 0.866 |
+
+The original columns remain available to the model alongside the derived features.
+
+### Model comparison
+
+Two logistic-regression models were compared:
+
+- **Raw-feature baseline:** used the original input features.
+- **Engineered-feature model:** used the original input features plus the derived features listed above.
+
+Both models used the same stratified train/test split and class weighting. `PageValues` was excluded from both models for this comparison because its availability at prediction time should be confirmed before using it in a purchase-intention model.
+
+| Metric | Raw-feature baseline | Engineered-feature model |
+|---|---:|---:|
+| Purchase precision | 0.259 | 0.261 |
+| Purchase recall | 0.749 | 0.746 |
+| Purchase F1 | 0.385 | 0.386 |
+| ROC-AUC | 0.735 | 0.741 |
+| Average precision | 0.321 | 0.314 |
+
+ROC-AUC increased slightly, average precision decreased slightly, and purchase precision, recall, and F1 changed very little. Therefore, this test split does **not** show a clear overall improvement from feature engineering.
+
+### Conclusion
+
+This project added derived session-behavior features and cyclical month features during preprocessing. The original CSV was not changed. The comparison showed mixed, small metric changes rather than a clear overall improvement. The results are from a random stratified split; evaluation on newer sessions would be preferable if session dates become available.
